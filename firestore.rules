@@ -55,5 +55,11 @@ service cloud.firestore {
       allow update: if isSignedIn() && (request.auth.uid == userId || request.auth.token.email == "admin@fast.com");
       allow list, create, delete: if isSignedIn() && request.auth.token.email == "admin@fast.com";
     }
+
+    // Settings Collection matches (Global config like branding)
+    match /settings/{doc} {
+      allow read: if true; // anyone can read visual branding
+      allow write: if isSignedIn() && request.auth.token.email == "admin@fast.com";
+    }
   }
 }
