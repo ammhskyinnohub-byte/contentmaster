@@ -3,16 +3,12 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
-import cors from "cors";
 
 dotenv.config();
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
-
-  // Add CORS to allow requests from Firebase hosting
-  app.use(cors());
 
   // Let Express handle json payloads up to 10MB to support base64 product image uploads
   app.use(express.json({ limit: '10mb' }));
