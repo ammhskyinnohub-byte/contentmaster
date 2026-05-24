@@ -1,0 +1,6 @@
+{
+  "name": "FAST - Content Master",
+  "description": "Creative AI Content Writing Assistant that produces high-converting, ready-to-use social media copywriting based on your product details, photos, tones, and target platforms.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
