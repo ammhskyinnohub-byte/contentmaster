@@ -11,13 +11,16 @@ export interface UserDoc {
 export interface Generation {
   id: string;
   userId: string;
-  productName: string;
-  topic: string;
-  platform: string;
-  tone: string;
-  cta: string;
+  productName?: string; // Made optional for Recap
+  topic?: string;       // Made optional for Recap
+  platform?: string;    // Made optional for Recap
+  tone?: string;        // Made optional for Recap
+  cta?: string;         // Made optional for Recap
   imageUrl?: string;
-  language: string;
+  language?: string;    // Made optional for Recap
+  videoLink?: string;   // Added for Recap
+  duration?: string;    // Added for Recap
+  type?: 'content' | 'recap' | 'audio' | 'calendar'; // Differentiate apps
   generatedContent: string;
   createdAt: any; // Firestore server timestamp or string date
 }
@@ -52,12 +55,11 @@ export const TONES = [
 ];
 
 export const CTAS = [
-  { value: 'Shop Now (အခုပဲ ဝယ်ယူလိုက်ပါ)', label: 'Shop Now (အခုပဲ ဝယ်ယူလိုက်ပါ)' },
-  { value: 'Learn More (အသေးစိတ် ထပ်မံဖတ်ရှုရန်)', label: 'Learn More (အသေးစိတ် ထပ်မံဖတ်ရှုရန်)' },
-  { value: 'Sign Up (စာရင်းသွင်းရန်)', label: 'Sign Up (စာရင်းသွင်းရန်)' },
-  { value: 'PM us to order (မက်ဆေ့ခ်ျ - Chat Box ကနေမှာယူပါ)', label: 'PM us to order (မက်ဆေ့ခ်ျ - Chat Box ကနေမှာယူပါ)' },
-  { value: 'Leave a comment below (အောက်မှာမေးခဲ့ပေးပါ)', label: 'Leave a comment below (အောက်မှာမေးခဲ့ပေးပါ)' },
-  { value: 'Contact us now (အမြန်ဆက်သွယ်လိုက်ပါ)', label: 'Contact us now (အမြန်ဆက်သွယ်လိုက်ပါ)' }
+  { value: 'ကွန်းမန့်မန့်ဖို့', label: 'ကွန်းမန့်မန့်ဖို့' },
+  { value: 'Messenger ကိုလာဖို့', label: 'Messenger ကိုလာဖို့' },
+  { value: 'ဖုန်းခေါ်ဖို့', label: 'ဖုန်းခေါ်ဖို့' },
+  { value: 'Video ကိုကြည့်ဖို့', label: 'Video ကိုကြည့်ဖို့' },
+  { value: 'လာဝယ်ဖို့', label: 'လာဝယ်ဖို့' }
 ];
 
 export const LANGUAGES = [

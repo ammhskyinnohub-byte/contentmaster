@@ -20,7 +20,7 @@ import Login from "./components/Login";
 import CmsAdmin from "./components/CmsAdmin";
 import AITrainingSettings from "./components/AITrainingSettings";
 import { Generation } from "./types";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles, Clock, ShieldCheck, Brain } from "lucide-react";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -113,17 +113,13 @@ export default function App() {
   // Fetch full user generations from Firestore
   const fetchHistory = async (uid: string) => {
     setDbLoading(true);
-    const pathRef = "generations";
     try {
-      const q = query(
-        collection(db, pathRef),
-        where("userId", "==", uid)
-      );
+      const qGen = query(collection(db, "generations"), where("userId", "==", uid));
       
-      const snapshot = await getDocs(q);
+      const snapGen = await getDocs(qGen);
       const items: Generation[] = [];
       
-      snapshot.forEach((docSnap) => {
+      snapGen.forEach((docSnap) => {
         items.push({ id: docSnap.id, ...docSnap.data() } as Generation);
       });
 
@@ -154,7 +150,7 @@ export default function App() {
       setHistory(items);
     } catch (err) {
       // Wrap per Firestore integration skill specifications
-      handleFirestoreError(err, OperationType.GET, pathRef);
+      handleFirestoreError(err, OperationType.GET, "generations");
     } finally {
       setDbLoading(false);
     }
@@ -162,15 +158,18 @@ export default function App() {
 
   // Save generated record to user's Firestore histories
   const handleSaveGeneration = async (genData: {
-    productName: string;
-    topic: string;
-    platform: string;
-    tone: string;
-    cta: string;
-    language: string;
+    productName?: string;
+    topic?: string;
+    platform?: string;
+    tone?: string;
+    cta?: string;
+    language?: string;
     imageUrl?: string;
+    videoLink?: string;
+    duration?: string;
+    type?: 'content' | 'recap' | 'audio';
     generatedContent: string;
-  }) => {
+  }, cost: number = 10) => {
     if (!user) return;
     const pathRef = "generations";
     // Create highly descriptive randomized path-variable custom ID
@@ -179,13 +178,16 @@ export default function App() {
     const payload = {
       id: newGenId,
       userId: user.uid,
-      productName: genData.productName,
-      topic: genData.topic,
-      platform: genData.platform,
-      tone: genData.tone,
-      cta: genData.cta,
-      language: genData.language,
+      productName: genData.productName || null,
+      topic: genData.topic || null,
+      platform: genData.platform || null,
+      tone: genData.tone || null,
+      cta: genData.cta || null,
+      language: genData.language || null,
       imageUrl: genData.imageUrl || null,
+      videoLink: genData.videoLink || null,
+      duration: genData.duration || null,
+      type: genData.type || 'content',
       generatedContent: genData.generatedContent,
       createdAt: serverTimestamp() // Meets our path verification and temporal security rules tests
     };
@@ -194,10 +196,10 @@ export default function App() {
       const docRef = doc(db, "generations", newGenId);
       await setDoc(docRef, payload);
       
-      // Deduct 10 tokens securely
+      // Deduct tokens securely based on cost passed
       if (!isAdmin) {
         await updateDoc(doc(db, "users", user.uid), {
-          tokens: Math.max(0, userTokens - 10)
+          tokens: Math.max(0, userTokens - cost)
         });
       }
       
@@ -211,9 +213,10 @@ export default function App() {
   // Delete generated item from user history logs
   const handleDeleteGeneration = async (id: string) => {
     if (!user) return;
-    const pathRef = `generations/${id}`;
+    const collectionName = "generations";
+    const pathRef = `${collectionName}/${id}`;
     try {
-      await deleteDoc(doc(db, "generations", id));
+      await deleteDoc(doc(db, collectionName, id));
       setHistory(prev => prev.filter(item => item.id !== id));
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, pathRef);
@@ -245,60 +248,119 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[#0c0a1f] font-sans text-black dark:text-slate-100 flex flex-col antialiased selection:bg-black/[0.12] dark:selection:bg-indigo-500/30 relative overflow-hidden">
+    <div className="h-[100dvh] bg-white dark:bg-[#0c0a1f] font-sans text-black dark:text-slate-100 flex flex-col antialiased selection:bg-black/[0.12] dark:selection:bg-indigo-500/30 relative overflow-hidden">
       
       {/* Decorative Blur Mesh Blobs */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/15 blur-[120px] rounded-full pointer-events-none"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-purple-600/10 blur-[150px] rounded-full pointer-events-none"></div>
       
       {/* Navigation section */}
-      <Navbar 
-        user={user} 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
-        historyCount={history.length}
-        isAdmin={isAdmin}
-        userTokens={userTokens}
-      />
+      <div className="flex-shrink-0 z-20">
+        <Navbar 
+          user={user} 
+          activeTab={activeTab} 
+          setActiveTab={setActiveTab} 
+          historyCount={history.length}
+          isAdmin={isAdmin}
+          userTokens={userTokens}
+        />
+      </div>
 
       {/* Main page views switcher */}
-      <main className="flex-grow z-10">
-        {activeTab === 'training' && isAdmin ? (
-          <AITrainingSettings />
-        ) : activeTab === 'cms' && isAdmin ? (
-          <CmsAdmin adminEmail={user.email} />
-        ) : activeTab === 'create' ? (
-          <CreateContent 
-            user={user} 
-            onSaveGeneration={handleSaveGeneration}
-            userTokens={userTokens}
-            isAdmin={isAdmin}
-          />
-        ) : (
-          <HistoryList 
-            user={user} 
-            history={history} 
-            onDelete={handleDeleteGeneration} 
-          />
-        )}
+      <main className="flex-1 overflow-y-auto pb-20 md:pb-0 z-10">
+        <div className="min-h-full flex flex-col">
+          {activeTab === 'training' && isAdmin ? (
+            <AITrainingSettings />
+          ) : activeTab === 'cms' && isAdmin ? (
+            <CmsAdmin adminEmail={user.email} />
+          ) : activeTab === 'create' ? (
+            <CreateContent 
+              user={user} 
+              onSaveGeneration={handleSaveGeneration}
+              userTokens={userTokens}
+              isAdmin={isAdmin}
+            />
+          ) : (
+            <HistoryList 
+              user={user} 
+              history={history} 
+              onDelete={handleDeleteGeneration} 
+            />
+          )}
+
+          {/* Humble professional design footer */}
+          <footer className="mt-auto border-t border-black/5 dark:border-white/5 bg-black/[0.01] dark:bg-white/[0.01] backdrop-blur-md py-6 z-10">
+            <div className="mx-auto max-w-7xl flex justify-center px-4 sm:px-6 lg:px-8 text-xs font-medium text-slate-600 dark:text-slate-400">
+              <div className="flex items-center gap-1.5 justify-center text-center">
+                <span className="text-black/70 dark:text-slate-300 font-bold">&copy; {new Date().getFullYear()} FAST Content Master.</span>
+                <span>All rights reserved.</span>
+              </div>
+            </div>
+          </footer>
+        </div>
       </main>
 
-      {/* Humble professional design footer */}
-      <footer className="mt-auto border-t border-black/5 dark:border-white/5 bg-black/[0.01] dark:bg-white/[0.01] backdrop-blur-md py-6 z-10">
-        <div className="mx-auto max-w-7xl flex flex-col sm:flex-row items-center justify-between px-4 sm:px-6 lg:px-8 text-xs font-medium text-slate-600 dark:text-slate-400">
-          <div className="flex items-center gap-1.5 justify-center">
-            <span className="text-black/70 dark:text-slate-300 font-bold">&copy; {new Date().getFullYear()} FAST Content Master.</span>
-            <span>All rights reserved.</span>
-          </div>
-          <div className="mt-2 sm:mt-0 flex gap-4 text-slate-500 dark:text-slate-500">
-            <span className="hover:text-black dark:text-indigo-400 transition-colors">Frosted Glass Theme</span>
-            <span>&bull;</span>
-            <span>Google Gemini AI</span>
-            <span>&bull;</span>
-            <span>Secure Persistence</span>
-          </div>
+      {/* Mobile Bottom Navigation Bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/80 dark:bg-[#0c0a1f]/90 backdrop-blur-xl border-t border-black/10 dark:border-white/10 pb-[env(safe-area-inset-bottom)]">
+        <div className="flex items-center justify-around px-2 py-2">
+          <button
+            onClick={() => setActiveTab('create')}
+            className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all ${
+              activeTab === 'create' 
+                ? 'text-indigo-600 dark:text-indigo-400' 
+                : 'text-slate-500 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <Sparkles className="h-5 w-5" />
+            <span className="text-[9px] font-bold uppercase tracking-wider">Content</span>
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`relative flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all ${
+              activeTab === 'history' 
+                ? 'text-indigo-600 dark:text-indigo-400' 
+                : 'text-slate-500 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <Clock className="h-5 w-5" />
+            <span className="text-[9px] font-bold uppercase tracking-wider">History</span>
+            {history.length > 0 && (
+              <span className="absolute top-1 right-2 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-[8px] font-black text-white ring-2 ring-white dark:ring-[#0c0a1f]">
+                {history.length > 99 ? '99+' : history.length}
+              </span>
+            )}
+          </button>
+
+          {isAdmin && (
+            <>
+              <button
+                onClick={() => setActiveTab('cms')}
+                className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all ${
+                  activeTab === 'cms' 
+                    ? 'text-indigo-600 dark:text-indigo-400' 
+                    : 'text-slate-500 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                <ShieldCheck className="h-5 w-5" />
+                <span className="text-[9px] font-bold uppercase tracking-wider">CMS</span>
+              </button>
+              
+              <button
+                onClick={() => setActiveTab('training')}
+                className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-all ${
+                  activeTab === 'training' 
+                    ? 'text-indigo-600 dark:text-indigo-400' 
+                    : 'text-slate-500 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                <Brain className="h-5 w-5" />
+                <span className="text-[9px] font-bold uppercase tracking-wider">AI</span>
+              </button>
+            </>
+          )}
         </div>
-      </footer>
+      </div>
 
     </div>
   );
