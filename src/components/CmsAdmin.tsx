@@ -383,7 +383,7 @@ export default function CmsAdmin({ adminEmail }: CmsAdminProps) {
                     type="text"
                     required
                     placeholder="e.g., Maung Maung"
-                    value={newName}
+                    value={newName || ""}
                     onChange={(e) => setNewName(e.target.value)}
                     className="w-full text-xs rounded-xl border border-black/20 dark:border-white/20 bg-transparent pl-9.5 pr-4 py-2.5 outline-none focus:border-white focus:ring-1 focus:ring-white/20 text-black dark:text-slate-100 placeholder-slate-500"
                   />
@@ -401,7 +401,7 @@ export default function CmsAdmin({ adminEmail }: CmsAdminProps) {
                     type="email"
                     required
                     placeholder="user@gmail.com"
-                    value={newEmail}
+                    value={newEmail || ""}
                     onChange={(e) => setNewEmail(e.target.value)}
                     className="w-full text-xs rounded-xl border border-black/20 dark:border-white/20 bg-transparent pl-9.5 pr-4 py-2.5 outline-none focus:border-white focus:ring-1 focus:ring-white/20 text-black dark:text-slate-100 placeholder-slate-500"
                   />
@@ -419,7 +419,7 @@ export default function CmsAdmin({ adminEmail }: CmsAdminProps) {
                     type="password"
                     required
                     placeholder="At least 6 characters"
-                    value={newPassword}
+                    value={newPassword || ""}
                     onChange={(e) => setNewPassword(e.target.value)}
                     className="w-full text-xs rounded-xl border border-black/20 dark:border-white/20 bg-transparent pl-9.5 pr-4 py-2.5 outline-none focus:border-white focus:ring-1 focus:ring-white/20 text-black dark:text-slate-100 placeholder-slate-500"
                   />
@@ -647,7 +647,7 @@ export default function CmsAdmin({ adminEmail }: CmsAdminProps) {
                   <input 
                     type="number"
                     min="1"
-                    value={tokenAmountInput}
+                    value={tokenAmountInput || ""}
                     onChange={(e) => setTokenAmountInput(e.target.value)}
                     className="w-full text-sm rounded-xl border border-black/20 dark:border-white/20 bg-transparent pl-10 pr-4 py-3 outline-none focus:border-white text-black dark:text-white font-semibold"
                   />

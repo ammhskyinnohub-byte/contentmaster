@@ -91,7 +91,7 @@ export default function AITrainingSettings() {
               ) : (
                 <textarea
                   rows={12}
-                  value={instructionsDo}
+                  value={instructionsDo || ""}
                   onChange={(e) => setInstructionsDo(e.target.value)}
                   placeholder="e.g. Always use formal corporate tone. Explain the 3 key benefits of GlowUp serum..."
                   className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-4 text-sm outline-none focus:border-black dark:focus:border-indigo-500 focus:ring-2 focus:ring-black/20 dark:focus:ring-indigo-500/20 transition-all text-black dark:text-white font-medium resize-none leading-relaxed custom-scrollbar placeholder-slate-400 dark:placeholder-slate-600"
@@ -114,7 +114,7 @@ export default function AITrainingSettings() {
               ) : (
                 <textarea
                   rows={12}
-                  value={instructionsDont}
+                  value={instructionsDont || ""}
                   onChange={(e) => setInstructionsDont(e.target.value)}
                   placeholder="e.g. NEVER use 'Hello guys'. NEVER mention competitors like XYZ Brand..."
                   className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 p-4 text-sm outline-none focus:border-black dark:focus:border-rose-500 focus:ring-2 focus:ring-black/20 dark:focus:ring-rose-500/20 transition-all text-black dark:text-white font-medium resize-none leading-relaxed custom-scrollbar placeholder-slate-400 dark:placeholder-slate-600"

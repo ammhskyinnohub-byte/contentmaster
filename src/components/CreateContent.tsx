@@ -1,6 +1,6 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { User } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { 
   Sparkles, 
@@ -13,7 +13,9 @@ import {
   Clock, 
   HelpCircle,
   FileText,
-  Volume2
+  Volume2,
+  Brain as BrainIcon,
+  ChevronDown
 } from "lucide-react";
 import { 
   PLATFORMS, 
@@ -21,7 +23,7 @@ import {
   CTAS, 
   LANGUAGES, 
   ContentFormData, 
-  PlatformType 
+  PlatformType
 } from "../types";
 
 interface CreateContentProps {
@@ -35,7 +37,7 @@ interface CreateContentProps {
     language: string;
     imageUrl?: string;
     generatedContent: string;
-  }) => Promise<void>;
+  }, cost?: number) => Promise<void>;
   userTokens: number;
   isAdmin: boolean;
 }
@@ -43,11 +45,15 @@ interface CreateContentProps {
 export default function CreateContent({ user, onSaveGeneration, userTokens, isAdmin }: CreateContentProps) {
   // Form values
   const [productName, setProductName] = useState("");
+  const [contentType, setContentType] = useState("Social Content");
+  const [duration, setDuration] = useState("Under 1 Minute");
   const [platform, setPlatform] = useState<PlatformType>("Facebook");
   const [topic, setTopic] = useState("");
   const [tone, setTone] = useState("Persuasive");
-  const [cta, setCta] = useState("Shop Now (အခုပဲ ဝယ်ယူလိုက်ပါ)");
+  const [cta, setCta] = useState(CTAS[0].value);
   const [language, setLanguage] = useState("burmese");
+  const [contentLength, setContentLength] = useState("Medium");
+  const [useEmojis, setUseEmojis] = useState("Yes");
   const [productPhoto, setProductPhoto] = useState<string>("");
   
   // UI and operations state
@@ -114,6 +120,8 @@ export default function CreateContent({ user, onSaveGeneration, userTokens, isAd
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const currentCost = contentType === 'Video Script' && duration === '1-3 Minutes (Long Form)' ? 20 : 10;
+
   // Generator action
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,8 +135,8 @@ export default function CreateContent({ user, onSaveGeneration, userTokens, isAd
       return;
     }
     
-    if (user && !isAdmin && userTokens < 10) {
-      setError("Not enough tokens! You need at least 10 tokens to generate a post. Please ask the Admin to refill your balance.");
+    if (user && !isAdmin && userTokens < currentCost) {
+      setError(`Not enough tokens! You need at least ${currentCost} tokens to generate a post. Please ask the Admin to refill your balance.`);
       return;
     }
 
@@ -164,17 +172,38 @@ export default function CreateContent({ user, onSaveGeneration, userTokens, isAd
           tone,
           cta,
           language,
+          contentLength,
+          useEmojis,
+          contentType,
+          duration,
           productPhoto: productPhoto || undefined,
           customInstructions
         }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to generate content.");
+        let errStr = "Failed to generate content.";
+        try {
+          const arrData = await response.json();
+          errStr = arrData.error || errStr;
+        } catch(e) {
+          errStr = response.statusText || errStr;
+        }
+        throw new Error(errStr);
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        const text = await response.text();
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          throw new Error("Unexpected response from server: " + text.substring(0, 100));
+        }
+      } catch (e: any) {
+        throw new Error(e.message || "Server is waking up or temporarily unavailable. Please try again.");
+      }
+      
       setGeneratedContent(data.content);
 
       // Auto-save to Firebase history if authenticated
@@ -183,13 +212,13 @@ export default function CreateContent({ user, onSaveGeneration, userTokens, isAd
           await onSaveGeneration({
             productName,
             topic,
-            platform,
+            platform: contentType === 'Video Script' ? 'Video Script' : platform,
             tone,
-            cta,
+            cta: contentType === 'Video Script' ? duration : cta,
             language,
             imageUrl: productPhoto || undefined,
             generatedContent: data.content,
-          });
+          }, currentCost);
         } catch (dbErr: any) {
           console.error("Failed to save generation in history DB:", dbErr);
           // Don't fail the generator itself, just display warning or log
@@ -294,6 +323,29 @@ export default function CreateContent({ user, onSaveGeneration, userTokens, isAd
               <h2 className="text-xs font-bold uppercase tracking-wider text-black/80 dark:text-slate-200">Content Configuration</h2>
             </div>
 
+            {/* Content Type Switcher */}
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-black dark:text-indigo-300 mb-2">
+                Content Type <span className="text-red-400">*</span>
+              </label>
+              <div className="flex gap-2">
+                {['Social Content', 'Video Script'].map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setContentType(type)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 px-3 border text-xs font-semibold transition-all cursor-pointer ${
+                      contentType === type
+                        ? "border-black dark:border-indigo-500 bg-black/[0.04] dark:bg-indigo-500/10 text-black dark:text-indigo-300 shadow-md"
+                        : "border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-black/10 dark:bg-white/10"
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Product Name */}
             <div>
               <label htmlFor="productName" className="block text-[10px] font-bold uppercase tracking-widest text-black dark:text-indigo-300 mb-2">
@@ -305,34 +357,55 @@ export default function CreateContent({ user, onSaveGeneration, userTokens, isAd
                 required
                 maxLength={200}
                 placeholder="ဥပမာ - Glow Up Organics Serum"
-                value={productName}
+                value={productName || ""}
                 onChange={(e) => setProductName(e.target.value)}
                 className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3.5 py-3 text-sm outline-none focus:border-black dark:border-indigo-500 focus:ring-2 focus:ring-black/20 dark:ring-indigo-500/20 transition-all text-black dark:text-white font-medium placeholder-slate-500"
               />
             </div>
 
             {/* Target Social Platform (Visual Interactive Buttons) */}
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-widest text-black dark:text-indigo-300 mb-2">
-                Target Platform <span className="text-red-400">*</span>
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {PLATFORMS.map((node) => (
-                  <button
-                    key={node.value}
-                    type="button"
-                    onClick={() => setPlatform(node.value)}
-                    className={`flex flex-col items-center justify-center rounded-xl p-2.5 border text-center transition-all cursor-pointer ${
-                      platform === node.value
-                        ? "border-black dark:border-indigo-500 bg-black/[0.04] dark:bg-indigo-500/10 text-black dark:text-indigo-300 font-bold shadow-md"
-                        : "border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-black/10 dark:bg-white/10 hover:text-black/80 dark:text-slate-200"
-                    }`}
-                  >
-                    <span className="text-xs font-medium tracking-tight">{node.label}</span>
-                  </button>
-                ))}
+            {contentType === 'Social Content' && (
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-black dark:text-indigo-300 mb-2">
+                  Target Platform <span className="text-red-400">*</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 md:gap-2">
+                  {PLATFORMS.map((node) => (
+                    <button
+                      key={node.value}
+                      type="button"
+                      onClick={() => setPlatform(node.value)}
+                      className={`flex flex-col items-center justify-center rounded-xl p-2 md:p-2.5 border text-center transition-all cursor-pointer ${
+                        platform === node.value
+                          ? "border-black dark:border-indigo-500 bg-black/[0.04] dark:bg-indigo-500/10 text-black dark:text-indigo-300 font-bold shadow-md"
+                          : "border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-black/10 dark:bg-white/10 hover:text-black/80 dark:text-slate-200"
+                      }`}
+                    >
+                      <span className="text-[11px] md:text-xs font-medium tracking-tight whitespace-nowrap">{node.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Video Script Duration */}
+            {contentType === 'Video Script' && (
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-black dark:text-indigo-300 mb-2">
+                  Video Duration <span className="text-red-400">*</span>
+                </label>
+                <select
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                  className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#161233] px-3.5 py-3 text-sm outline-none focus:border-black dark:border-indigo-500 focus:ring-2 focus:ring-black/20 dark:ring-indigo-500/20 transition-all text-black/80 dark:text-slate-200 font-medium cursor-pointer"
+                >
+                  <option value="Under 15 Seconds (Shorts/Reels)" className="bg-white dark:bg-[#161233] text-black/80 dark:text-slate-200">Under 15 Seconds (Shorts/Reels)</option>
+                  <option value="15-30 Seconds" className="bg-white dark:bg-[#161233] text-black/80 dark:text-slate-200">15-30 Seconds</option>
+                  <option value="30-60 Seconds" className="bg-white dark:bg-[#161233] text-black/80 dark:text-slate-200">30-60 Seconds</option>
+                  <option value="1-3 Minutes (Long Form)" className="bg-white dark:bg-[#161233] text-black/80 dark:text-slate-200">1-3 Minutes (Long Form)</option>
+                </select>
+              </div>
+            )}
 
             {/* Content Tone Dropdown */}
             <div>
@@ -357,23 +430,25 @@ export default function CreateContent({ user, onSaveGeneration, userTokens, isAd
             </div>
 
             {/* CTA Option Dropdown */}
-            <div>
-              <label htmlFor="cta-select" className="block text-[10px] font-bold uppercase tracking-widest text-black dark:text-indigo-300 mb-2">
-                Call to Action (CTA)
-              </label>
-              <select
-                id="cta-select"
-                value={cta}
-                onChange={(e) => setCta(e.target.value)}
-                className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#161233] px-3.5 py-3 text-sm outline-none focus:border-black dark:border-indigo-500 focus:ring-2 focus:ring-black/20 dark:ring-indigo-500/20 transition-all text-black/80 dark:text-slate-200 font-medium cursor-pointer"
-              >
-                {CTAS.map((item) => (
-                  <option key={item.value} value={item.value} className="bg-white dark:bg-[#161233] text-black/80 dark:text-slate-200">
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {contentType === 'Social Content' && (
+              <div>
+                <label htmlFor="cta-select" className="block text-[10px] font-bold uppercase tracking-widest text-black dark:text-indigo-300 mb-2">
+                  Call to Action (CTA)
+                </label>
+                <select
+                  id="cta-select"
+                  value={cta}
+                  onChange={(e) => setCta(e.target.value)}
+                  className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#161233] px-3.5 py-3 text-sm outline-none focus:border-black dark:border-indigo-500 focus:ring-2 focus:ring-black/20 dark:ring-indigo-500/20 transition-all text-black/80 dark:text-slate-200 font-medium cursor-pointer"
+                >
+                  {CTAS.map((item) => (
+                    <option key={item.value} value={item.value} className="bg-white dark:bg-[#161233] text-black/80 dark:text-slate-200">
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Language Switcher */}
             <div>
@@ -399,6 +474,56 @@ export default function CreateContent({ user, onSaveGeneration, userTokens, isAd
               </div>
             </div>
 
+            {/* Content Length & Emoji (2 columns on md) */}
+            {contentType === 'Social Content' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-black dark:text-indigo-300 mb-2">
+                    Content Length
+                  </label>
+                  <select
+                    value={contentLength}
+                    onChange={(e) => setContentLength(e.target.value)}
+                    className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#161233] px-3.5 py-3 text-sm outline-none focus:border-black dark:border-indigo-500 focus:ring-2 focus:ring-black/20 dark:ring-indigo-500/20 transition-all text-black/80 dark:text-slate-200 font-medium cursor-pointer"
+                  >
+                    <option value="Short & Punchy" className="bg-white dark:bg-[#161233] text-black/80 dark:text-slate-200">Short & Punchy</option>
+                    <option value="Medium (Standard)" className="bg-white dark:bg-[#161233] text-black/80 dark:text-slate-200">Medium (Standard)</option>
+                    <option value="Long & Detailed" className="bg-white dark:bg-[#161233] text-black/80 dark:text-slate-200">Long & Detailed</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-black dark:text-indigo-300 mb-2">
+                    Emoji Usage
+                  </label>
+                  <div className="flex gap-2 h-[46px]">
+                    <button
+                      type="button"
+                      onClick={() => setUseEmojis("Yes")}
+                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                        useEmojis === "Yes"
+                          ? "border-black dark:border-indigo-500 bg-black/[0.04] dark:bg-indigo-500/10 text-black dark:text-indigo-300 shadow-md"
+                          : "border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-black/10 dark:bg-white/10"
+                      }`}
+                    >
+                      <span>Yes 😊</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUseEmojis("No")}
+                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                        useEmojis === "No"
+                          ? "border-black dark:border-indigo-500 bg-black/[0.04] dark:bg-indigo-500/10 text-black dark:text-indigo-300 shadow-md"
+                          : "border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-black/10 dark:bg-white/10"
+                      }`}
+                    >
+                      <span>No Emojis</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Content Details / Topic */}
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -413,7 +538,7 @@ export default function CreateContent({ user, onSaveGeneration, userTokens, isAd
                 rows={4}
                 maxLength={1000}
                 placeholder="ရေးသားစေချင်သော အချက်အလက်များ - ပရိုမိုးရှင်းအသေးစိတ်၊ သုံးစွဲပုံနည်းလမ်းများ နှင့် အကျိုးကျေးဇူးများကို ဖော်ပြပေးပါ"
-                value={topic}
+                value={topic || ""}
                 onChange={(e) => setTopic(e.target.value)}
                 className="w-full rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 px-3.5 py-3 text-sm outline-none focus:border-black dark:border-indigo-500 focus:ring-2 focus:ring-black/20 dark:ring-indigo-500/20 transition-all text-black dark:text-white font-medium resize-none leading-relaxed placeholder-slate-500"
               />
@@ -484,16 +609,16 @@ export default function CreateContent({ user, onSaveGeneration, userTokens, isAd
             <button
               id="btn-generate-submit"
               type="submit"
-              disabled={loading || (!!user && !isAdmin && userTokens < 10)}
-              className="w-full flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-black dark:bg-gradient-to-r dark:from-indigo-500 dark:to-purple-500 py-3 text-white font-bold uppercase tracking-widest text-white shadow-xl shadow-black/20 dark:shadow-indigo-500/20 hover:opacity-95 active:scale-98 transition-all disabled:opacity-50 cursor-pointer"
+              disabled={loading || (!!user && !isAdmin && userTokens < currentCost)}
+              className="w-full flex flex-col items-center justify-center gap-1 rounded-xl bg-black dark:bg-gradient-to-r dark:from-indigo-500 dark:to-purple-500 py-2.5 text-sm text-white font-bold uppercase tracking-wider text-white shadow-lg shadow-black/20 dark:shadow-indigo-500/20 hover:opacity-95 active:scale-98 transition-all disabled:opacity-50 cursor-pointer"
             >
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4.5 w-4.5" />
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4" />
                 <span>{loading ? "Wielding AI Content Master..." : "Generate Magic Content"}</span>
               </div>
               {!isAdmin && (
                 <span className="text-[9px] text-slate-400 dark:text-indigo-200 font-medium tracking-normal bg-black/20 px-2 py-0.5 rounded-md">
-                  Cost: 10 Tokens
+                  Cost: {currentCost} Tokens
                 </span>
               )}
             </button>
@@ -571,7 +696,7 @@ export default function CreateContent({ user, onSaveGeneration, userTokens, isAd
               </div>
 
               {/* Output Content Field */}
-              <div className="p-6 md:p-8 space-y-1 select-text bg-black/[0.01] dark:bg-white/[0.01] max-h-[480px] overflow-y-auto custom-scrollbar relative border-b border-black/5 dark:border-white/5">
+              <div className="p-4 sm:p-6 md:p-8 space-y-1 select-text bg-black/[0.01] dark:bg-white/[0.01] max-h-[480px] overflow-y-auto custom-scrollbar relative border-b border-black/5 dark:border-white/5">
                 <div className="absolute top-4 right-4 z-10">
                   <span className="text-[10px] bg-black/[0.08] dark:bg-indigo-500/20 text-black dark:text-indigo-300 border border-black/30 dark:border-indigo-500/30 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">High Engagement</span>
                 </div>
@@ -579,18 +704,18 @@ export default function CreateContent({ user, onSaveGeneration, userTokens, isAd
               </div>
 
               {/* Dynamic Reading stats metrics display */}
-              <div className="p-5 grid grid-cols-3 gap-4 border-b border-black/5 dark:border-white/5 bg-black/[0.01] dark:bg-white/[0.01]">
-                <div className="bg-black/5 dark:bg-white/5 p-3 rounded-xl border border-black/5 dark:border-white/5 text-center">
+              <div className="p-3.5 sm:p-5 grid grid-cols-3 gap-2 sm:gap-4 border-b border-black/5 dark:border-white/5 bg-black/[0.01] dark:bg-white/[0.01]">
+                <div className="bg-black/5 dark:bg-white/5 p-2 sm:p-3 rounded-xl border border-black/5 dark:border-white/5 text-center">
                   <p className="text-[9px] text-slate-600 dark:text-slate-400 uppercase font-bold mb-1">Reading Time</p>
-                  <p className="text-sm font-bold text-black dark:text-white">{readingTime}s</p>
+                  <p className="text-xs sm:text-sm font-bold text-black dark:text-white">{readingTime}s</p>
                 </div>
-                <div className="bg-black/5 dark:bg-white/5 p-3 rounded-xl border border-black/5 dark:border-white/5 text-center">
+                <div className="bg-black/5 dark:bg-white/5 p-2 sm:p-3 rounded-xl border border-black/5 dark:border-white/5 text-center">
                   <p className="text-[9px] text-slate-600 dark:text-slate-400 uppercase font-bold mb-1">Word Count</p>
-                  <p className="text-sm font-bold text-black dark:text-white">{wordCount}</p>
+                  <p className="text-xs sm:text-sm font-bold text-black dark:text-white">{wordCount}</p>
                 </div>
-                <div className="bg-black/5 dark:bg-white/5 p-3 rounded-xl border border-black/5 dark:border-white/5 text-center">
+                <div className="bg-black/5 dark:bg-white/5 p-2 sm:p-3 rounded-xl border border-black/5 dark:border-white/5 text-center">
                   <p className="text-[9px] text-slate-600 dark:text-slate-400 uppercase font-bold mb-1">AI Confidence</p>
-                  <p className="text-sm font-bold text-green-400">98%</p>
+                  <p className="text-xs sm:text-sm font-bold text-green-400">98%</p>
                 </div>
               </div>
 

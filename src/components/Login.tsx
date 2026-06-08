@@ -98,9 +98,9 @@ export default function Login({ onLoginSuccess, authError, setAuthError }: Login
                   type="email"
                   required
                   placeholder="name@company.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.value || e.target.value)}
-                  className="w-full text-xs rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 pl-10 pr-4 py-3 outline-none focus:border-black dark:border-indigo-500 focus:ring-2 focus:ring-black/20 dark:ring-indigo-500/20 text-black dark:text-slate-100 placeholder-slate-500 font-semibold"
+                  value={email || ""}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full text-sm rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 pl-10 pr-4 py-3 outline-none focus:border-black dark:border-indigo-500 focus:ring-2 focus:ring-black/20 dark:ring-indigo-500/20 text-black dark:text-slate-100 placeholder-slate-500 font-semibold"
                 />
               </div>
             </div>
@@ -116,9 +116,9 @@ export default function Login({ onLoginSuccess, authError, setAuthError }: Login
                   type="password"
                   required
                   placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.value || e.target.value)}
-                  className="w-full text-xs rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 pl-10 pr-4 py-3 outline-none focus:border-black dark:border-indigo-500 focus:ring-2 focus:ring-black/20 dark:ring-indigo-500/20 text-black dark:text-slate-100 placeholder-slate-500 font-semibold"
+                  value={password || ""}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full text-sm rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 pl-10 pr-4 py-3 outline-none focus:border-black dark:border-indigo-500 focus:ring-2 focus:ring-black/20 dark:ring-indigo-500/20 text-black dark:text-slate-100 placeholder-slate-500 font-semibold"
                 />
               </div>
             </div>

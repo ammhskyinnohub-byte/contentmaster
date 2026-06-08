@@ -12,7 +12,11 @@ import {
   ExternalLink,
   Sparkles,
   Inbox,
-  AlertCircle
+  AlertCircle,
+  Download,
+  ChevronDown,
+  ChevronUp,
+  Eye
 } from "lucide-react";
 
 interface HistoryListProps {
@@ -26,6 +30,49 @@ export default function HistoryList({ user, history, onDelete }: HistoryListProp
   const [selectedPlatform, setSelectedPlatform] = useState<string>("All");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<string[]>([]);
+  
+  const toggleExpand = (id: string) => {
+    setExpandedIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const exportToCSV = (markdownStr: string, filename: string) => {
+    const lines = markdownStr.split('\n');
+    const csvRows: string[] = [];
+    
+    for (const line of lines) {
+      if (line.trim().startsWith('|')) {
+        let cleanLine = line.trim();
+        if (cleanLine.startsWith('|')) cleanLine = cleanLine.substring(1);
+        if (cleanLine.endsWith('|')) cleanLine = cleanLine.substring(0, cleanLine.length - 1);
+        
+        const columns = cleanLine.split('|').map(col => col.trim());
+        
+        if (columns.every(col => col.replace(/-/g, '').replace(/:/g, '').trim() === '')) {
+          continue;
+        }
+        
+        const csvLine = columns.map(col => `"${col.replace(/"/g, '""')}"`).join(',');
+        csvRows.push(csvLine);
+      }
+    }
+    
+    if (csvRows.length === 0) {
+      alert("No table found in this generated content to export.");
+      return;
+    }
+    
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${filename.replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   if (!user) {
     return (
@@ -44,13 +91,20 @@ export default function HistoryList({ user, history, onDelete }: HistoryListProp
 
   // Filter history
   const filteredHistory = history.filter((item) => {
+    const isRecap = item.type === 'recap';
+    const mainTitle = isRecap ? (item.videoLink || '') : (item.productName || '');
+    const topicDesc = isRecap ? (item.duration || '') : (item.topic || '');
+
     const matchesSearch = 
-      item.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.topic.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      mainTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      topicDesc.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.generatedContent.toLowerCase().includes(searchTerm.toLowerCase());
       
     const matchesPlatform = 
-      selectedPlatform === "All" || item.platform === selectedPlatform;
+      selectedPlatform === "All" || 
+      (!isRecap && item.type !== 'audio' && item.platform === selectedPlatform) || 
+      (isRecap && selectedPlatform === "Recap") || 
+      (item.type === 'audio' && selectedPlatform === "Audio");
 
     return matchesSearch && matchesPlatform;
   });
@@ -121,6 +175,8 @@ export default function HistoryList({ user, history, onDelete }: HistoryListProp
 
   const getPlatformClass = (plat: string) => {
     switch (plat) {
+      case 'Audio': return 'bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/20';
+      case 'Calendar': return 'bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/20';
       case 'Facebook': return 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20';
       case 'Instagram': return 'bg-pink-500/10 text-pink-700 dark:text-pink-300 border-pink-500/20';
       case 'TikTok': return 'bg-slate-100/10 text-black/80 dark:text-slate-200 border-black/10 dark:border-white/10';
@@ -155,17 +211,7 @@ export default function HistoryList({ user, history, onDelete }: HistoryListProp
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       
-      {/* Title */}
-      <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-extrabold tracking-tight text-black dark:text-white font-display">
-            Generation Histories
-          </h2>
-          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-            Browse and manage all your copywriting deliverables written by FAST.
-          </p>
-        </div>
-
+      <div className="mb-6 flex flex-col md:flex-row md:items-center justify-end gap-4">
         {/* Search and Filters */}
         <div className="flex flex-col sm:flex-row gap-3">
           {/* Seek Input */}
@@ -173,20 +219,20 @@ export default function HistoryList({ user, history, onDelete }: HistoryListProp
             <Search className="absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-slate-600 dark:text-slate-400" />
             <input
               type="text"
-              placeholder="Search product, topics, content..."
-              value={searchTerm}
+              placeholder="ရှာဖွေရန်... (Search topic, keyword...)"
+              value={searchTerm || ""}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full sm:w-64 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 pl-9 pr-4 py-2 text-xs outline-none focus:border-black dark:border-indigo-500 focus:ring-2 focus:ring-black/20 dark:ring-indigo-500/20 transition-all font-medium text-black/80 dark:text-slate-200"
             />
           </div>
 
           {/* Social filter selection */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-            {["All", "Facebook", "TikTok", "Instagram", "LinkedIn", "Lemon8"].map((platName) => (
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+            {["All", "Calendar", "Facebook", "TikTok", "Instagram", "LinkedIn", "Twitter/X"].map((platName) => (
               <button
                 key={platName}
                 onClick={() => setSelectedPlatform(platName)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors border select-none ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors border select-none whitespace-nowrap ${
                   selectedPlatform === platName
                     ? "bg-black/10 dark:bg-white/10 text-black dark:text-indigo-300 border-black/20 dark:border-white/20"
                     : "bg-black/5 dark:bg-white/5 text-slate-600 dark:text-slate-400 border-black/10 dark:border-white/10 hover:bg-black/10 dark:bg-white/10 dark:hover:text-white hover:text-black"
@@ -205,7 +251,7 @@ export default function HistoryList({ user, history, onDelete }: HistoryListProp
           <div className="h-12 w-12 rounded-full bg-black/5 dark:bg-white/5 flex items-center justify-center text-slate-600 dark:text-slate-400 mb-4">
             <Inbox className="h-6 w-6" />
           </div>
-          <h3 className="text-sm font-bold text-black/70 dark:text-slate-300">No copywriting logs found</h3>
+          <h3 className="text-sm font-bold text-black/70 dark:text-slate-300">No logs found</h3>
           <p className="text-xs text-slate-500 dark:text-slate-500 max-w-xs mt-1 leading-normal">
             {searchTerm || selectedPlatform !== "All"
               ? "ဇကာတင်စစ်ထုတ်ချက်နှင့်ကိုက်ညီသော မှတ်တမ်းမတွေ့ပါ။ အခြားစကားလုံးများဖြင့် ထပ်မံရှာဖွေကြည့်ပါ။"
@@ -213,58 +259,90 @@ export default function HistoryList({ user, history, onDelete }: HistoryListProp
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-          {filteredHistory.map((node) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6 items-start justify-items-center md:justify-items-stretch">
+          {filteredHistory.map((node) => {
+            const isRecap = node.type === 'recap';
+            const isAudio = node.type === 'audio';
+            const isCalendar = node.type === 'calendar';
+            const platformName = isCalendar ? 'Calendar' : isAudio ? 'Audio' : isRecap ? 'Recap' : (node.platform || 'General');
+            const toneName = isCalendar ? node.tone || 'Content Plan' : isAudio ? node.tone || 'Voice' : isRecap ? node.duration || 'Auto' : (node.tone || 'Auto');
+            const mainTitle = isCalendar ? node.productName || 'Content Calendar' : isAudio ? 'FAST Audio Master' : isRecap ? node.videoLink : node.productName;
+            const subTitle = isCalendar ? node.topic || 'Strategic Plan' : isAudio ? node.topic : isRecap ? 'Summary Generated' : node.topic;
+            
+            return (
             <div
               key={node.id}
-              className="rounded-2xl border border-black/10 dark:border-white/10 bg-white dark:bg-white/[0.03] backdrop-blur-xl shadow-lg hover:shadow-xl transition-all duration-200 flex flex-col overflow-hidden relative group"
+              className="w-full max-w-[95%] sm:max-w-md md:max-w-none mx-auto rounded-2xl border border-black/10 dark:border-white/10 bg-white dark:bg-white/[0.03] backdrop-blur-xl shadow-lg hover:shadow-xl transition-all duration-200 flex flex-col overflow-hidden relative group"
             >
               
               {/* Card Meta Header */}
-              <div className="px-4.5 py-3.5 border-b border-black/5 dark:border-white/5 flex items-center justify-between bg-black/[0.02] dark:bg-white/[0.02]">
-                <div className="flex items-center gap-2">
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${getPlatformClass(node.platform)}`}>
-                    {node.platform}
+              <div className="px-4.5 py-3.5 border-b border-black/5 dark:border-white/5 flex flex-wrap items-center justify-between gap-2 bg-black/[0.02] dark:bg-white/[0.02]">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${getPlatformClass(platformName)}`}>
+                    {platformName}
                   </span>
                   <span className="text-[10px] font-bold text-black dark:text-indigo-300 bg-black/[0.04] dark:bg-indigo-500/10 border border-black/20 dark:border-indigo-500/20 px-2 py-0.5 rounded uppercase">
-                    {node.tone}
+                    {toneName}
                   </span>
                 </div>
                 
-                <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
+                <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400 shrink-0">
                   <Calendar className="h-3 w-3" />
                   <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400">{formatFirebaseDate(node.createdAt)}</span>
                 </div>
               </div>
 
               {/* Card Details / Topic */}
-              <div className="p-5 space-y-3.5 flex-1 select-text">
-                <div className="flex gap-3">
+              <div className="p-4 sm:p-5 flex flex-col gap-3.5 flex-1 select-text">
+                <div className="flex flex-col sm:flex-row gap-3">
                   {node.imageUrl && (
                     <img
                       src={node.imageUrl}
                       alt="Ref product context"
-                      className="h-14 w-14 shrink-0 rounded-lg object-cover border border-black/10 dark:border-white/10 shadow-inner"
+                      className="h-20 w-full sm:h-14 sm:w-14 shrink-0 rounded-lg object-cover border border-black/10 dark:border-white/10 shadow-inner"
                     />
                   )}
-                  <div className="space-y-0.5">
-                    <h3 className="text-sm font-bold text-black dark:text-white leading-tight">
-                      {node.productName}
+                  <div className="space-y-1 flex-1">
+                    <h3 className="text-sm font-bold text-black dark:text-white leading-tight break-words">
+                      {mainTitle}
                     </h3>
-                    <p className="text-[11px] text-slate-600 dark:text-slate-400 font-medium line-clamp-2 leading-normal">
-                      <strong>Goal:</strong> {node.topic}
+                    <p className="text-[11px] text-slate-600 dark:text-slate-400 font-medium leading-normal break-words">
+                      <strong>Info:</strong> {subTitle}
                     </p>
                   </div>
                 </div>
 
-                {/* Generated Content Box */}
-                <div className="rounded-xl bg-black/[0.01] dark:bg-white/[0.01] p-4 border border-black/5 dark:border-white/5 max-h-[180px] overflow-y-auto text-xs custom-scrollbar">
-                  {renderMarkdown(node.generatedContent)}
+                <div className="flex justify-center mt-1 mb-2">
+                  <button
+                    onClick={() => toggleExpand(node.id)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-xs font-bold text-slate-700 dark:text-slate-300 transition-colors border border-black/5 dark:border-white/5 shadow-sm cursor-pointer"
+                  >
+                    {expandedIds.includes(node.id) ? (
+                      <>
+                        <ChevronUp className="h-3.5 w-3.5" />
+                        <span>Hide Content</span>
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="h-3.5 w-3.5" />
+                        <span>Read Content</span>
+                      </>
+                    )}
+                  </button>
                 </div>
+
+                {/* Generated Content Box */}
+                {expandedIds.includes(node.id) && (
+                  <div className="rounded-xl bg-black/[0.01] dark:bg-white/[0.01] p-3 sm:p-4 border border-black/5 dark:border-white/5 max-h-[50vh] sm:max-h-[350px] overflow-y-auto overflow-x-hidden text-xs custom-scrollbar mt-2 animation-fade-in">
+                    <div className="break-words w-full markdown-body">
+                      {renderMarkdown(node.generatedContent)}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Action Toolbar Footer */}
-              <div className="px-4 py-3 bg-black/[0.02] dark:bg-white/[0.02] border-t border-black/5 dark:border-white/5 flex items-center justify-between">
+              <div className="px-4 py-3 bg-black/[0.02] dark:bg-white/[0.02] border-t border-black/5 dark:border-white/5 flex flex-wrap items-center justify-between gap-3">
                 
                 {/* Delete button action */}
                 {deleteConfirmId === node.id ? (
@@ -299,27 +377,39 @@ export default function HistoryList({ user, history, onDelete }: HistoryListProp
                 )}
 
                 {/* Copy content button */}
-                <button
-                  onClick={() => handleCopy(node.id, node.generatedContent)}
-                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold bg-black/5 dark:bg-white/5 text-black/70 dark:text-slate-300 border border-black/10 dark:border-white/10 shadow-sm dark:hover:text-white hover:text-black hover:border-black/20 dark:border-white/20 active:bg-black/10 dark:bg-white/10 transition-all cursor-pointer"
-                >
-                  {copiedId === node.id ? (
-                    <>
-                      <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                      <span className="text-emerald-600 dark:text-emerald-400">Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
-                      <span>Copy</span>
-                    </>
+                <div className="flex items-center gap-2">
+                  {isCalendar && (
+                    <button
+                      onClick={() => exportToCSV(node.generatedContent, `Calendar_${node.productName || 'Export'}`)}
+                      className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300 border border-fuchsia-500/20 shadow-sm hover:bg-fuchsia-500 hover:text-white transition-all cursor-pointer"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      <span>Export CSV</span>
+                    </button>
                   )}
-                </button>
+                  <button
+                    onClick={() => handleCopy(node.id, node.generatedContent)}
+                    className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold bg-black/5 dark:bg-white/5 text-black/70 dark:text-slate-300 border border-black/10 dark:border-white/10 shadow-sm dark:hover:text-white hover:text-black hover:border-black/20 dark:border-white/20 active:bg-black/10 dark:bg-white/10 transition-all cursor-pointer"
+                  >
+                    {copiedId === node.id ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span className="text-emerald-600 dark:text-emerald-400">Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
+                        <span>Copy</span>
+                      </>
+                    )}
+                  </button>
+                </div>
 
               </div>
 
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
