@@ -35,6 +35,30 @@ service cloud.firestore {
         && data.createdAt == request.time;
     }
 
+    // Validation helper for knowledge base
+    function isValidKnowledge(data) {
+      return data.keys().hasAll(['id', 'userId', 'title', 'content', 'type', 'createdAt'])
+        && data.keys().size() <= 8
+        && data.id is string && data.id.size() <= 128
+        && data.userId is string && data.userId == request.auth.uid
+        && data.title is string && data.title.size() <= 300
+        && data.content is string && data.content.size() <= 100000
+        && data.type is string && data.type.size() <= 50
+        && data.createdAt == request.time;
+    }
+
+    // Validation helper for calendars
+    function isValidCalendar(data) {
+      return data.keys().hasAll(['id', 'userId', 'title', 'month', 'content', 'createdAt'])
+        && data.keys().size() <= 8
+        && data.id is string && data.id.size() <= 128
+        && data.userId is string && data.userId == request.auth.uid
+        && data.title is string && data.title.size() <= 300
+        && data.month is string && data.month.size() <= 50
+        && data.content is string && data.content.size() <= 100000
+        && data.createdAt == request.time;
+    }
+
     // Generations Collection matches
     match /generations/{generationId} {
       allow get: if isSignedIn() && (existing().userId == request.auth.uid || request.auth.token.email == "admin@fast.com");
@@ -46,6 +70,28 @@ service cloud.firestore {
         && isValidGeneration(request.resource.data)
         && request.resource.data.id == generationId;
         
+      allow delete: if isSignedIn() && (existing().userId == request.auth.uid || request.auth.token.email == "admin@fast.com");
+    }
+
+    // Knowledge Collection matches
+    match /knowledge/{docId} {
+      allow get: if isSignedIn() && (existing().userId == request.auth.uid || request.auth.token.email == "admin@fast.com");
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || request.auth.token.email == "admin@fast.com");
+      allow create: if isSignedIn() 
+        && isValidId(docId) 
+        && isValidKnowledge(request.resource.data)
+        && request.resource.data.id == docId;
+      allow delete: if isSignedIn() && (existing().userId == request.auth.uid || request.auth.token.email == "admin@fast.com");
+    }
+
+    // Calendars Collection matches
+    match /calendars/{docId} {
+      allow get: if isSignedIn() && (existing().userId == request.auth.uid || request.auth.token.email == "admin@fast.com");
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || request.auth.token.email == "admin@fast.com");
+      allow create: if isSignedIn() 
+        && isValidId(docId) 
+        && isValidCalendar(request.resource.data)
+        && request.resource.data.id == docId;
       allow delete: if isSignedIn() && (existing().userId == request.auth.uid || request.auth.token.email == "admin@fast.com");
     }
 
